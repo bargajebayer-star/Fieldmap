@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FieldMap" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#2F6B3F</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+    </style>
+</resources>
