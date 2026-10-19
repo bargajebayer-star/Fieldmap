@@ -1,148 +1,198 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="4dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Plantation Project · फील्ड काम"
+            android:textColor="#8A5A2B"
             android:textSize="12sp"
-            android:textStyle="bold"
-            android:textColor="#8A5A2B" />
+            android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="फील्ड लोकेशन नकाशा"
-            android:textSize="26sp"
+            android:textSize="24sp"
             android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/etMapName"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:hint="नकाशाचे नाव"
-            android:inputType="text"
-            android:minHeight="48dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="नवीन ठिकाण जोडा"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/etName"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="ठिकाणाचे / गटाचे नाव"
-            android:inputType="textCapSentences"
-            android:minHeight="48dp" />
-
-        <Spinner
-            android:id="@+id/spCat"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:minHeight="48dp" />
-
-        <EditText
-            android:id="@+id/etNote"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="टीप (ऐच्छिक)"
-            android:inputType="textMultiLine|textCapSentences"
-            android:minHeight="48dp" />
-
-        <Button
-            android:id="@+id/btnPhoto"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="52dp"
-            android:text="फोटो जोडा (कॅमेरा / गॅलरी)" />
-
-        <ImageView
-            android:id="@+id/ivPhoto"
-            android:layout_width="120dp"
-            android:layout_height="120dp"
-            android:layout_marginTop="6dp"
-            android:contentDescription="निवडलेला फोटो"
-            android:scaleType="centerCrop"
-            android:visibility="gone" />
-
-        <Button
-            android:id="@+id/btnGps"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:minHeight="52dp"
-            android:text="माझे लोकेशन घ्या" />
-
-        <TextView
-            android:id="@+id/tvGps"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:fontFamily="monospace"
-            android:text="लोकेशन अजून घेतलेले नाही"
-            android:textSize="14sp" />
-
-        <Button
-            android:id="@+id/btnSave"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="52dp"
-            android:text="यादीत जोडा" />
-
-        <TextView
-            android:id="@+id/tvCount"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="ठिकाणांची यादी (0)"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <LinearLayout
-            android:id="@+id/llList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-        <Button
-            android:id="@+id/btnExport"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:minHeight="52dp"
-            android:text="CSV + KML फाईल शेअर करा" />
-
-        <Button
-            android:id="@+id/btnMyMaps"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="52dp"
-            android:text="Google My Maps उघडा" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:lineSpacingExtra="3dp"
-            android:text="My Maps मध्ये: नवीन नकाशा तयार करा, Import दाबा, शेअर केलेली KML (किंवा CSV) फाईल निवडा. CSV साठी Latitude आणि Longitude हे स्तंभ निवडा. My Maps संगणकावर किंवा फोनच्या ब्राउझरमध्ये (Desktop site) उत्तम चालते."
-            android:textSize="13sp" />
     </LinearLayout>
-</ScrollView>
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:tabMode="fixed"
+        xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Tab 1: add a place -->
+        <ScrollView
+            android:id="@+id/svAdd"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <EditText
+                    android:id="@+id/etFarmer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="शेतकऱ्याचे नाव"
+                    android:inputType="textPersonName|textCapWords"
+                    android:minHeight="48dp" />
+
+                <EditText
+                    android:id="@+id/etVillage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="ठिकाण (गाव)"
+                    android:inputType="textCapWords"
+                    android:minHeight="48dp" />
+
+                <Spinner
+                    android:id="@+id/spCat"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:minHeight="48dp" />
+
+                <EditText
+                    android:id="@+id/etNote"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="टीप (ऐच्छिक)"
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:minHeight="48dp" />
+
+                <Button
+                    android:id="@+id/btnGps"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:minHeight="52dp"
+                    android:text="माझे लोकेशन घ्या" />
+
+                <TextView
+                    android:id="@+id/tvGps"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:fontFamily="monospace"
+                    android:text="लोकेशन अजून घेतलेले नाही"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/btnPhoto"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:minHeight="52dp"
+                    android:text="फोटो जोडा (कॅमेरा / गॅलरी)" />
+
+                <ImageView
+                    android:id="@+id/ivPhoto"
+                    android:layout_width="160dp"
+                    android:layout_height="160dp"
+                    android:layout_marginTop="6dp"
+                    android:contentDescription="निवडलेला फोटो"
+                    android:scaleType="centerCrop"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="यादीत जोडताना फोटोवर लोकेशन (geotag), नाव, ठिकाण आणि तारीख छापली जाते."
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btnSave"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:minHeight="52dp"
+                    android:text="यादीत जोडा" />
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- Tab 2: all added places -->
+        <ScrollView
+            android:id="@+id/svList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/tvCount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="जोडलेली ठिकाणे (0)"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ठिकाणावर दाबले की ते Google Maps मध्ये उघडते."
+                    android:textSize="12sp" />
+
+                <LinearLayout
+                    android:id="@+id/llList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <Button
+                    android:id="@+id/btnExport"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:minHeight="52dp"
+                    android:text="CSV + KML + फोटो शेअर करा" />
+
+                <Button
+                    android:id="@+id/btnMyMaps"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:text="Google My Maps उघडा" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:lineSpacingExtra="3dp"
+                    android:text="My Maps मध्ये: नवीन नकाशा तयार करा, Import दाबा, शेअर केलेली KML (किंवा CSV) फाईल निवडा. CSV साठी Latitude आणि Longitude हे स्तंभ निवडा. My Maps संगणकावर उत्तम चालते."
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </ScrollView>
+    </FrameLayout>
+</LinearLayout>

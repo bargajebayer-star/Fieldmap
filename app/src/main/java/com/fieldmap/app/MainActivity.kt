@@ -2,14 +2,15 @@ package com.fieldmap.app
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Matrix
-import android.widget.ImageView
-import androidx.exifinterface.media.ExifInterface
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.Paint
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -23,6 +24,7 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
@@ -32,9 +34,12 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.exifinterface.media.ExifInterface
+import com.google.android.material.tabs.TabLayout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,7 +48,8 @@ class MainActivity : AppCompatActivity() {
 
     data class Place(
         val id: Long,
-        val name: String,
+        val farmer: String,
+        val village: String,
         val cat: String,
         val lat: Double,
         val lng: Double,
@@ -64,14 +70,17 @@ class MainActivity : AppCompatActivity() {
     private var curAcc: Float = 0f
     private var curPhoto: String? = null
     private var pendingPhoto: File? = null
-    private lateinit var ivPhoto: ImageView
 
-    private lateinit var etMapName: EditText
-    private lateinit var etName: EditText
+    private lateinit var tabs: TabLayout
+    private lateinit var svAdd: View
+    private lateinit var svList: View
+    private lateinit var etFarmer: EditText
+    private lateinit var etVillage: EditText
     private lateinit var etNote: EditText
     private lateinit var spCat: Spinner
     private lateinit var btnGps: Button
     private lateinit var tvGps: TextView
+    private lateinit var ivPhoto: ImageView
     private lateinit var tvCount: TextView
     private lateinit var llList: LinearLayout
 
@@ -118,23 +127,37 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        etMapName = findViewById(R.id.etMapName)
-        etName = findViewById(R.id.etName)
+        tabs = findViewById(R.id.tabs)
+        svAdd = findViewById(R.id.svAdd)
+        svList = findViewById(R.id.svList)
+        etFarmer = findViewById(R.id.etFarmer)
+        etVillage = findViewById(R.id.etVillage)
         etNote = findViewById(R.id.etNote)
         spCat = findViewById(R.id.spCat)
         btnGps = findViewById(R.id.btnGps)
         tvGps = findViewById(R.id.tvGps)
+        ivPhoto = findViewById(R.id.ivPhoto)
         tvCount = findViewById(R.id.tvCount)
         llList = findViewById(R.id.llList)
-        ivPhoto = findViewById(R.id.ivPhoto)
-        findViewById<Button>(R.id.btnPhoto).setOnClickListener { choosePhotoSource() }
 
         spCat.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
+
+        tabs.addTab(tabs.newTab().setText("ठिकाण जोडा"))
+        tabs.addTab(tabs.newTab().setText("यादी (0)"))
+        tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                showTab(tab.position)
+            }
+
+            override fun onTabUnselected(tab: TabLayout.Tab) {}
+            override fun onTabReselected(tab: TabLayout.Tab) {}
+        })
 
         loadState()
         renderList()
 
         btnGps.setOnClickListener { requestLocation() }
+        findViewById<Button>(R.id.btnPhoto).setOnClickListener { choosePhotoSource() }
         findViewById<Button>(R.id.btnSave).setOnClickListener { savePlace() }
         findViewById<Button>(R.id.btnExport).setOnClickListener { exportFiles() }
         findViewById<Button>(R.id.btnMyMaps).setOnClickListener {
@@ -142,14 +165,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onPause() {
-        super.onPause()
-        prefs().edit().putString("mapName", etMapName.text.toString()).apply()
-    }
-
     override fun onDestroy() {
         stopLocationFetch()
         super.onDestroy()
+    }
+
+    private fun showTab(position: Int) {
+        svAdd.visibility = if (position == 0) View.VISIBLE else View.GONE
+        svList.visibility = if (position == 1) View.VISIBLE else View.GONE
     }
 
     // ---------- state ----------
@@ -158,17 +181,20 @@ class MainActivity : AppCompatActivity() {
 
     private fun today(): String = SimpleDateFormat("dd/MM/yyyy", Locale.US).format(Date())
 
+    private fun mapName(): String = "Plantation Project ${today()}"
+
     private fun loadState() {
-        val p = prefs()
-        etMapName.setText(p.getString("mapName", null) ?: "Plantation Project ${today()}")
         places.clear()
         try {
-            val arr = JSONArray(p.getString("places", "[]"))
+            val arr = JSONArray(prefs().getString("places", "[]"))
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 places.add(
                     Place(
-                        o.getLong("id"), o.getString("name"), o.getString("cat"),
+                        o.getLong("id"),
+                        o.optString("farmer", o.optString("name", "")),
+                        o.optString("village", ""),
+                        o.optString("cat", ""),
                         o.getDouble("lat"), o.getDouble("lng"), o.optDouble("acc", 0.0).toFloat(),
                         o.optString("note", ""), o.optString("date", ""), o.optString("photo", "")
                     )
@@ -184,15 +210,13 @@ class MainActivity : AppCompatActivity() {
         for (pl in places) {
             arr.put(
                 JSONObject()
-                    .put("id", pl.id).put("name", pl.name).put("cat", pl.cat)
-                    .put("lat", pl.lat).put("lng", pl.lng).put("acc", pl.acc.toDouble())
+                    .put("id", pl.id).put("farmer", pl.farmer).put("village", pl.village)
+                    .put("cat", pl.cat).put("lat", pl.lat).put("lng", pl.lng)
+                    .put("acc", pl.acc.toDouble())
                     .put("note", pl.note).put("date", pl.date).put("photo", pl.photo)
             )
         }
-        prefs().edit()
-            .putString("places", arr.toString())
-            .putString("mapName", etMapName.text.toString())
-            .apply()
+        prefs().edit().putString("places", arr.toString()).apply()
     }
 
     // ---------- location ----------
@@ -278,28 +302,49 @@ class MainActivity : AppCompatActivity() {
         locationListener = null
     }
 
-    // ---------- list ----------
+    // ---------- add place ----------
 
     private fun savePlace() {
-        val name = etName.text.toString().trim()
+        val farmer = etFarmer.text.toString().trim()
+        val village = etVillage.text.toString().trim()
         val lat = curLat
         val lng = curLng
-        if (name.isEmpty()) {
-            toast("नाव लिहा")
+        if (farmer.isEmpty()) {
+            toast("शेतकऱ्याचे नाव लिहा")
+            return
+        }
+        if (village.isEmpty()) {
+            toast("ठिकाण (गाव) लिहा")
             return
         }
         if (lat == null || lng == null) {
             toast("आधी 'माझे लोकेशन घ्या' दाबा")
             return
         }
+
+        val date = today()
+        val photoName = curPhoto
+        if (photoName != null) {
+            val stampLines = listOf(
+                "शेतकरी: $farmer",
+                "ठिकाण: $village",
+                String.format(Locale.US, "%.6f, %.6f (±%d मी)", lat, lng, curAcc.toInt()),
+                SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US).format(Date())
+            )
+            if (!stampPhoto(photoFile(photoName), stampLines, lat, lng)) {
+                toast("फोटोवर लोकेशन छापता आले नाही, फोटो तसाच जोडला")
+            }
+        }
+
         places.add(
             Place(
-                System.currentTimeMillis(), name, spCat.selectedItem.toString(),
-                lat, lng, curAcc, etNote.text.toString().trim(), today(), curPhoto ?: ""
+                System.currentTimeMillis(), farmer, village, spCat.selectedItem.toString(),
+                lat, lng, curAcc, etNote.text.toString().trim(), date, photoName ?: ""
             )
         )
         saveState()
-        etName.setText("")
+        etFarmer.setText("")
+        etVillage.setText("")
         etNote.setText("")
         curLat = null
         curLng = null
@@ -307,24 +352,28 @@ class MainActivity : AppCompatActivity() {
         curPhoto = null
         updatePhotoPreview()
         renderList()
-        toast("'$name' जोडले")
+        toast("'$farmer' जोडले. यादी टॅबमध्ये पहा.")
     }
+
+    // ---------- list tab ----------
 
     private fun renderList() {
         llList.removeAllViews()
-        tvCount.text = "ठिकाणांची यादी (${places.size})"
+        tvCount.text = "जोडलेली ठिकाणे (${places.size})"
+        tabs.getTabAt(1)?.text = "यादी (${places.size})"
         if (places.isEmpty()) {
             llList.addView(TextView(this).apply {
                 text = "अजून ठिकाण जोडलेले नाही."
-                setPadding(0, dp(8), 0, dp(8))
+                setPadding(0, dp(12), 0, dp(12))
             })
             return
         }
-        for (pl in places) {
+        for (pl in places.reversed()) {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, dp(10), 0, dp(10))
+                setOnClickListener { openInMaps(pl) }
             }
             if (pl.photo.isNotEmpty()) {
                 val thumb = ImageView(this).apply {
@@ -332,10 +381,10 @@ class MainActivity : AppCompatActivity() {
                     contentDescription = "फोटो"
                     decodeThumb(photoFile(pl.photo), 200)?.let { setImageBitmap(it) }
                 }
-                row.addView(thumb, LinearLayout.LayoutParams(dp(64), dp(64)).apply { marginEnd = dp(10) })
+                row.addView(thumb, LinearLayout.LayoutParams(dp(72), dp(72)).apply { marginEnd = dp(10) })
             }
             val info = TextView(this).apply {
-                text = "${pl.name}\n${pl.cat} · ${pl.date}\n" +
+                text = "${pl.farmer}\n${pl.village} · ${pl.date}\n" +
                         String.format(Locale.US, "%.5f, %.5f (±%d मी)", pl.lat, pl.lng, pl.acc.toInt()) +
                         (if (pl.note.isNotEmpty()) "\n${pl.note}" else "")
                 textSize = 14f
@@ -354,9 +403,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun openInMaps(pl: Place) {
+        val label = Uri.encode("${pl.farmer}, ${pl.village}")
+        val uri = Uri.parse(String.format(Locale.US, "geo:%f,%f?q=%f,%f(%s)", pl.lat, pl.lng, pl.lat, pl.lng, label))
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        } catch (e: Exception) {
+            val web = Uri.parse(String.format(Locale.US, "https://www.google.com/maps/search/?api=1&query=%f,%f", pl.lat, pl.lng))
+            startActivity(Intent(Intent.ACTION_VIEW, web))
+        }
+    }
+
     private fun confirmDelete(pl: Place) {
         AlertDialog.Builder(this)
-            .setMessage("'${pl.name}' यादीतून काढायचे?")
+            .setMessage("'${pl.farmer}' यादीतून काढायचे?")
             .setPositiveButton("काढा") { _, _ ->
                 if (pl.photo.isNotEmpty()) photoFile(pl.photo).delete()
                 places.removeAll { it.id == pl.id }
@@ -374,9 +434,8 @@ class MainActivity : AppCompatActivity() {
             toast("आधी किमान एक ठिकाण जोडा")
             return
         }
-        saveState()
-        val mapName = etMapName.text.toString().trim().ifEmpty { "FieldMap" }
-        val base = mapName.replace(Regex("[\\\\/:*?\"<>|]+"), "").trim().ifEmpty { "FieldMap" }
+        val mapName = mapName()
+        val base = "Plantation Project ${SimpleDateFormat("dd-MM-yyyy", Locale.US).format(Date())}"
 
         val dir = File(cacheDir, "exports").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
@@ -406,11 +465,11 @@ class MainActivity : AppCompatActivity() {
         if (v.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + v.replace("\"", "\"\"") + "\"" else v
 
     private fun buildCsv(): String {
-        val sb = StringBuilder("Name,Category,Latitude,Longitude,Accuracy_m,Description,Date,Photo\r\n")
+        val sb = StringBuilder("Name,Village,Category,Latitude,Longitude,Accuracy_m,Description,Date,Photo\r\n")
         for (p in places) {
             sb.append(
                 listOf(
-                    p.name, p.cat,
+                    p.farmer, p.village, p.cat,
                     String.format(Locale.US, "%.7f", p.lat),
                     String.format(Locale.US, "%.7f", p.lng),
                     p.acc.toInt().toString(), p.note, p.date, p.photo
@@ -432,11 +491,11 @@ class MainActivity : AppCompatActivity() {
             sb.append("<Folder>\n<name>").append(xml(cat)).append("</name>\n")
             for (p in places.filter { it.cat == cat }) {
                 val desc = buildString {
-                    append(p.date)
+                    append("ठिकाण: ").append(p.village).append(" · ").append(p.date)
                     if (p.note.isNotEmpty()) append(" · ").append(p.note)
                     if (p.photo.isNotEmpty()) append(" · फोटो: ").append(p.photo)
                 }
-                sb.append("<Placemark>\n<name>").append(xml(p.name)).append("</name>\n")
+                sb.append("<Placemark>\n<name>").append(xml(p.farmer)).append("</name>\n")
                 sb.append("<description>").append(xml(desc)).append("</description>\n")
                 sb.append("<Point><coordinates>")
                     .append(String.format(Locale.US, "%.7f,%.7f,0", p.lng, p.lat))
@@ -496,29 +555,72 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun decodeThumb(f: File, size: Int): Bitmap? {
+    private fun exifDegrees(f: File): Float = try {
+        when (ExifInterface(f.path).getAttributeInt(
+            ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+        )) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+    } catch (e: Exception) {
+        0f
+    }
+
+    private fun decodeSampled(f: File, maxSide: Int): Bitmap? {
         if (!f.exists()) return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(f.path, bounds)
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= size && bounds.outHeight / (sample * 2) >= size) sample *= 2
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
         val bmp = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample })
             ?: return null
-        val degrees = try {
-            when (ExifInterface(f.path).getAttributeInt(
-                ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
-            )) {
-                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-                else -> 0f
-            }
-        } catch (e: Exception) {
-            0f
-        }
+        val degrees = exifDegrees(f)
         if (degrees == 0f) return bmp
         val m = Matrix().apply { postRotate(degrees) }
         return Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+    }
+
+    private fun decodeThumb(f: File, size: Int): Bitmap? = decodeSampled(f, size)
+
+    /**
+     * Burns the farmer, place, coordinates and time into the bottom of the photo and
+     * writes the GPS position into the JPEG's EXIF data (geotag).
+     */
+    private fun stampPhoto(f: File, lines: List<String>, lat: Double, lng: Double): Boolean {
+        return try {
+            val src = decodeSampled(f, 1600) ?: return false
+            val bmp = src.copy(Bitmap.Config.ARGB_8888, true)
+            val canvas = Canvas(bmp)
+            val textSize = maxOf(24f, bmp.width / 26f)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                this.textSize = textSize
+                setShadowLayer(3f, 1f, 1f, Color.BLACK)
+            }
+            val lineH = textSize * 1.3f
+            val pad = textSize * 0.6f
+            val boxH = lineH * lines.size + pad * 2
+            val bg = Paint().apply { color = Color.argb(150, 0, 0, 0) }
+            canvas.drawRect(0f, bmp.height - boxH, bmp.width.toFloat(), bmp.height.toFloat(), bg)
+            var y = bmp.height - boxH + pad + textSize
+            for (line in lines) {
+                canvas.drawText(line, pad, y, paint)
+                y += lineH
+            }
+            FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            val exif = ExifInterface(f.path)
+            exif.setLatLong(lat, lng)
+            exif.setAttribute(
+                ExifInterface.TAG_DATETIME,
+                SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.US).format(Date())
+            )
+            exif.saveAttributes()
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     // ---------- helpers ----------
