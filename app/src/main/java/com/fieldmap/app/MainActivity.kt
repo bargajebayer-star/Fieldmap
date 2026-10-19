@@ -2,6 +2,11 @@ package com.fieldmap.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.widget.ImageView
+import androidx.exifinterface.media.ExifInterface
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -44,12 +49,11 @@ class MainActivity : AppCompatActivity() {
         val lng: Double,
         val acc: Float,
         val note: String,
-        val date: String
+        val date: String,
+        val photo: String
     )
 
     private val categories = listOf(
-        "गट नोंदणी (NBCDC SEED)",
-        "कम्युनिटी रजिस्ट्रेशन",
         "वृक्षारोपण स्थळ",
         "इतर"
     )
@@ -58,6 +62,9 @@ class MainActivity : AppCompatActivity() {
     private var curLat: Double? = null
     private var curLng: Double? = null
     private var curAcc: Float = 0f
+    private var curPhoto: String? = null
+    private var pendingPhoto: File? = null
+    private lateinit var ivPhoto: ImageView
 
     private lateinit var etMapName: EditText
     private lateinit var etName: EditText
@@ -81,6 +88,32 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    private val takePicture =
+        registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+            val f = pendingPhoto
+            pendingPhoto = null
+            if (ok && f != null && f.exists() && f.length() > 0) {
+                replaceCurrentPhoto(f.name)
+            } else {
+                f?.delete()
+            }
+        }
+
+    private val pickImage =
+        registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                try {
+                    val f = newPhotoFile()
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        f.outputStream().use { out -> input.copyTo(out) }
+                    }
+                    if (f.length() > 0) replaceCurrentPhoto(f.name) else f.delete()
+                } catch (e: Exception) {
+                    toast("फोटो घेता आला नाही")
+                }
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -93,6 +126,8 @@ class MainActivity : AppCompatActivity() {
         tvGps = findViewById(R.id.tvGps)
         tvCount = findViewById(R.id.tvCount)
         llList = findViewById(R.id.llList)
+        ivPhoto = findViewById(R.id.ivPhoto)
+        findViewById<Button>(R.id.btnPhoto).setOnClickListener { choosePhotoSource() }
 
         spCat.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
 
@@ -135,7 +170,7 @@ class MainActivity : AppCompatActivity() {
                     Place(
                         o.getLong("id"), o.getString("name"), o.getString("cat"),
                         o.getDouble("lat"), o.getDouble("lng"), o.optDouble("acc", 0.0).toFloat(),
-                        o.optString("note", ""), o.optString("date", "")
+                        o.optString("note", ""), o.optString("date", ""), o.optString("photo", "")
                     )
                 )
             }
@@ -151,7 +186,7 @@ class MainActivity : AppCompatActivity() {
                 JSONObject()
                     .put("id", pl.id).put("name", pl.name).put("cat", pl.cat)
                     .put("lat", pl.lat).put("lng", pl.lng).put("acc", pl.acc.toDouble())
-                    .put("note", pl.note).put("date", pl.date)
+                    .put("note", pl.note).put("date", pl.date).put("photo", pl.photo)
             )
         }
         prefs().edit()
@@ -260,7 +295,7 @@ class MainActivity : AppCompatActivity() {
         places.add(
             Place(
                 System.currentTimeMillis(), name, spCat.selectedItem.toString(),
-                lat, lng, curAcc, etNote.text.toString().trim(), today()
+                lat, lng, curAcc, etNote.text.toString().trim(), today(), curPhoto ?: ""
             )
         )
         saveState()
@@ -269,6 +304,8 @@ class MainActivity : AppCompatActivity() {
         curLat = null
         curLng = null
         tvGps.text = "लोकेशन अजून घेतलेले नाही"
+        curPhoto = null
+        updatePhotoPreview()
         renderList()
         toast("'$name' जोडले")
     }
@@ -288,6 +325,14 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, dp(10), 0, dp(10))
+            }
+            if (pl.photo.isNotEmpty()) {
+                val thumb = ImageView(this).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    contentDescription = "फोटो"
+                    decodeThumb(photoFile(pl.photo), 200)?.let { setImageBitmap(it) }
+                }
+                row.addView(thumb, LinearLayout.LayoutParams(dp(64), dp(64)).apply { marginEnd = dp(10) })
             }
             val info = TextView(this).apply {
                 text = "${pl.name}\n${pl.cat} · ${pl.date}\n" +
@@ -313,6 +358,7 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setMessage("'${pl.name}' यादीतून काढायचे?")
             .setPositiveButton("काढा") { _, _ ->
+                if (pl.photo.isNotEmpty()) photoFile(pl.photo).delete()
                 places.removeAll { it.id == pl.id }
                 saveState()
                 renderList()
@@ -342,6 +388,11 @@ class MainActivity : AppCompatActivity() {
             FileProvider.getUriForFile(this, authority, kmlFile),
             FileProvider.getUriForFile(this, authority, csvFile)
         )
+        for (pl in places) {
+            if (pl.photo.isNotEmpty() && photoFile(pl.photo).exists()) {
+                uris.add(FileProvider.getUriForFile(this, authority, photoFile(pl.photo)))
+            }
+        }
         val send = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
             type = "*/*"
             putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
@@ -355,14 +406,14 @@ class MainActivity : AppCompatActivity() {
         if (v.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + v.replace("\"", "\"\"") + "\"" else v
 
     private fun buildCsv(): String {
-        val sb = StringBuilder("Name,Category,Latitude,Longitude,Accuracy_m,Description,Date\r\n")
+        val sb = StringBuilder("Name,Category,Latitude,Longitude,Accuracy_m,Description,Date,Photo\r\n")
         for (p in places) {
             sb.append(
                 listOf(
                     p.name, p.cat,
                     String.format(Locale.US, "%.7f", p.lat),
                     String.format(Locale.US, "%.7f", p.lng),
-                    p.acc.toInt().toString(), p.note, p.date
+                    p.acc.toInt().toString(), p.note, p.date, p.photo
                 ).joinToString(",") { csvCell(it) }
             ).append("\r\n")
         }
@@ -383,6 +434,7 @@ class MainActivity : AppCompatActivity() {
                 val desc = buildString {
                     append(p.date)
                     if (p.note.isNotEmpty()) append(" · ").append(p.note)
+                    if (p.photo.isNotEmpty()) append(" · फोटो: ").append(p.photo)
                 }
                 sb.append("<Placemark>\n<name>").append(xml(p.name)).append("</name>\n")
                 sb.append("<description>").append(xml(desc)).append("</description>\n")
@@ -394,6 +446,79 @@ class MainActivity : AppCompatActivity() {
         }
         sb.append("</Document>\n</kml>\n")
         return sb.toString()
+    }
+
+    // ---------- photos ----------
+
+    private fun photoDir(): File = File(filesDir, "photos").apply { mkdirs() }
+
+    private fun photoFile(name: String): File = File(photoDir(), name)
+
+    private fun newPhotoFile(): File = File(photoDir(), "photo_${System.currentTimeMillis()}.jpg")
+
+    private fun choosePhotoSource() {
+        AlertDialog.Builder(this)
+            .setTitle("फोटो कुठून घ्यायचा?")
+            .setItems(arrayOf("कॅमेरा", "गॅलरी")) { _, which ->
+                if (which == 0) {
+                    try {
+                        val f = newPhotoFile()
+                        pendingPhoto = f
+                        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
+                        takePicture.launch(uri)
+                    } catch (e: Exception) {
+                        toast("कॅमेरा उघडता आला नाही")
+                    }
+                } else {
+                    pickImage.launch("image/*")
+                }
+            }
+            .show()
+    }
+
+    private fun replaceCurrentPhoto(name: String) {
+        curPhoto?.let { photoFile(it).delete() }
+        curPhoto = name
+        updatePhotoPreview()
+    }
+
+    private fun updatePhotoPreview() {
+        val name = curPhoto
+        if (name == null) {
+            ivPhoto.visibility = View.GONE
+            ivPhoto.setImageDrawable(null)
+        } else {
+            val bmp = decodeThumb(photoFile(name), 400)
+            if (bmp != null) {
+                ivPhoto.setImageBitmap(bmp)
+                ivPhoto.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    private fun decodeThumb(f: File, size: Int): Bitmap? {
+        if (!f.exists()) return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(f.path, bounds)
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= size && bounds.outHeight / (sample * 2) >= size) sample *= 2
+        val bmp = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return null
+        val degrees = try {
+            when (ExifInterface(f.path).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+            )) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        } catch (e: Exception) {
+            0f
+        }
+        if (degrees == 0f) return bmp
+        val m = Matrix().apply { postRotate(degrees) }
+        return Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
     }
 
     // ---------- helpers ----------

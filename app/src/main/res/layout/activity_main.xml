@@ -66,6 +66,23 @@
             android:minHeight="48dp" />
 
         <Button
+            android:id="@+id/btnPhoto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="52dp"
+            android:text="फोटो जोडा (कॅमेरा / गॅलरी)" />
+
+        <ImageView
+            android:id="@+id/ivPhoto"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_marginTop="6dp"
+            android:contentDescription="निवडलेला फोटो"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/btnGps"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
