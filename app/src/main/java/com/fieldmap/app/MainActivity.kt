@@ -19,6 +19,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Base64
+import java.net.HttpURLConnection
+import java.net.URL
 import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
@@ -56,7 +59,9 @@ class MainActivity : AppCompatActivity() {
         val acc: Float,
         val note: String,
         val date: String,
-        val photo: String
+        val photo: String,
+        val employee: String = "",
+        var synced: Boolean = false
     )
 
     private val categories = listOf(
@@ -74,6 +79,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tabs: TabLayout
     private lateinit var svAdd: View
     private lateinit var svList: View
+    private lateinit var svSettings: View
+    private lateinit var etEmployee: EditText
+    private lateinit var etScriptUrl: EditText
+    private lateinit var etKey: EditText
+    private lateinit var tvSync: TextView
+    private lateinit var tvSettingsStatus: TextView
+    private lateinit var btnSync: Button
+    private var syncing = false
     private lateinit var etFarmer: EditText
     private lateinit var etVillage: EditText
     private lateinit var etNote: EditText
@@ -139,11 +152,19 @@ class MainActivity : AppCompatActivity() {
         ivPhoto = findViewById(R.id.ivPhoto)
         tvCount = findViewById(R.id.tvCount)
         llList = findViewById(R.id.llList)
+        svSettings = findViewById(R.id.svSettings)
+        etEmployee = findViewById(R.id.etEmployee)
+        etScriptUrl = findViewById(R.id.etScriptUrl)
+        etKey = findViewById(R.id.etKey)
+        tvSync = findViewById(R.id.tvSync)
+        tvSettingsStatus = findViewById(R.id.tvSettingsStatus)
+        btnSync = findViewById(R.id.btnSync)
 
         spCat.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
 
         tabs.addTab(tabs.newTab().setText("ठिकाण जोडा"))
         tabs.addTab(tabs.newTab().setText("यादी (0)"))
+        tabs.addTab(tabs.newTab().setText("सेटिंग"))
         tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
                 showTab(tab.position)
@@ -154,8 +175,13 @@ class MainActivity : AppCompatActivity() {
         })
 
         loadState()
+        loadSettings()
         renderList()
+        syncPending()
 
+        btnSync.setOnClickListener { syncPending() }
+        findViewById<Button>(R.id.btnSaveSettings).setOnClickListener { saveSettings() }
+        findViewById<Button>(R.id.btnTest).setOnClickListener { testConnection() }
         btnGps.setOnClickListener { requestLocation() }
         findViewById<Button>(R.id.btnPhoto).setOnClickListener { choosePhotoSource() }
         findViewById<Button>(R.id.btnSave).setOnClickListener { savePlace() }
@@ -174,6 +200,7 @@ class MainActivity : AppCompatActivity() {
     private fun showTab(position: Int) {
         svAdd.visibility = if (position == 0) View.VISIBLE else View.GONE
         svList.visibility = if (position == 1) View.VISIBLE else View.GONE
+        svSettings.visibility = if (position == 2) View.VISIBLE else View.GONE
     }
 
     // ---------- state ----------
@@ -197,7 +224,8 @@ class MainActivity : AppCompatActivity() {
                         o.optString("village", ""),
                         o.optString("cat", ""),
                         o.getDouble("lat"), o.getDouble("lng"), o.optDouble("acc", 0.0).toFloat(),
-                        o.optString("note", ""), o.optString("date", ""), o.optString("photo", "")
+                        o.optString("note", ""), o.optString("date", ""), o.optString("photo", ""),
+                        o.optString("employee", ""), o.optBoolean("synced", false)
                     )
                 )
             }
@@ -215,6 +243,7 @@ class MainActivity : AppCompatActivity() {
                     .put("cat", pl.cat).put("lat", pl.lat).put("lng", pl.lng)
                     .put("acc", pl.acc.toDouble())
                     .put("note", pl.note).put("date", pl.date).put("photo", pl.photo)
+                    .put("employee", pl.employee).put("synced", pl.synced)
             )
         }
         prefs().edit().putString("places", arr.toString()).apply()
@@ -318,6 +347,10 @@ class MainActivity : AppCompatActivity() {
             toast("ठिकाण (गाव) लिहा")
             return
         }
+        if (employee().isEmpty()) {
+            toast("आधी सेटिंग टॅबमध्ये तुमचे नाव लिहा")
+            return
+        }
         if (lat == null || lng == null) {
             toast("आधी 'माझे लोकेशन घ्या' दाबा")
             return
@@ -340,7 +373,8 @@ class MainActivity : AppCompatActivity() {
         places.add(
             Place(
                 System.currentTimeMillis(), farmer, village, spCat.selectedItem.toString(),
-                lat, lng, curAcc, etNote.text.toString().trim(), date, photoName ?: ""
+                lat, lng, curAcc, etNote.text.toString().trim(), date, photoName ?: "",
+                employee(), false
             )
         )
         saveState()
@@ -354,6 +388,7 @@ class MainActivity : AppCompatActivity() {
         updatePhotoPreview()
         renderList()
         toast("'$farmer' जोडले. यादी टॅबमध्ये पहा.")
+        syncPending()
     }
 
     // ---------- list tab ----------
@@ -362,6 +397,7 @@ class MainActivity : AppCompatActivity() {
         llList.removeAllViews()
         tvCount.text = "जोडलेली ठिकाणे (${places.size})"
         tabs.getTabAt(1)?.text = "यादी (${places.size})"
+        btnSync.text = "सिंक करा (${places.count { !it.synced }} बाकी)"
         if (places.isEmpty()) {
             llList.addView(TextView(this).apply {
                 text = "अजून ठिकाण जोडलेले नाही."
@@ -385,7 +421,9 @@ class MainActivity : AppCompatActivity() {
                 row.addView(thumb, LinearLayout.LayoutParams(dp(72), dp(72)).apply { marginEnd = dp(10) })
             }
             val info = TextView(this).apply {
-                text = "${pl.farmer}\n${pl.village} · ${pl.date}\n" +
+                text = "${pl.farmer}\n${pl.village} · ${pl.date}" +
+                        (if (pl.employee.isNotEmpty()) " · ${pl.employee}" else "") +
+                        (if (pl.synced) " · ✓ सिंक" else " · ⏳ बाकी") + "\n" +
                         String.format(Locale.US, "%.5f, %.5f (±%d मी)", pl.lat, pl.lng, pl.acc.toInt()) +
                         (if (pl.note.isNotEmpty()) "\n${pl.note}" else "")
                 textSize = 14f
@@ -466,14 +504,14 @@ class MainActivity : AppCompatActivity() {
         if (v.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + v.replace("\"", "\"\"") + "\"" else v
 
     private fun buildCsv(): String {
-        val sb = StringBuilder("Name,Village,Category,Latitude,Longitude,Accuracy_m,Description,Date,Photo\r\n")
+        val sb = StringBuilder("Name,Village,Category,Latitude,Longitude,Accuracy_m,Description,Date,Photo,Employee\r\n")
         for (p in places) {
             sb.append(
                 listOf(
                     p.farmer, p.village, p.cat,
                     String.format(Locale.US, "%.7f", p.lat),
                     String.format(Locale.US, "%.7f", p.lng),
-                    p.acc.toInt().toString(), p.note, p.date, p.photo
+                    p.acc.toInt().toString(), p.note, p.date, p.photo, p.employee
                 ).joinToString(",") { csvCell(it) }
             ).append("\r\n")
         }
@@ -622,6 +660,135 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             false
         }
+    }
+
+    // ---------- settings and Google Sheet sync ----------
+
+    private fun employee(): String = prefs().getString("employee", "")?.trim() ?: ""
+    private fun scriptUrl(): String = prefs().getString("scriptUrl", "")?.trim() ?: ""
+    private fun scriptKey(): String = prefs().getString("scriptKey", "")?.trim() ?: ""
+
+    private fun loadSettings() {
+        etEmployee.setText(employee())
+        etScriptUrl.setText(scriptUrl())
+        etKey.setText(scriptKey())
+    }
+
+    private fun saveSettings() {
+        prefs().edit()
+            .putString("employee", etEmployee.text.toString().trim())
+            .putString("scriptUrl", etScriptUrl.text.toString().trim())
+            .putString("scriptKey", etKey.text.toString().trim())
+            .apply()
+        tvSettingsStatus.text = "सेव्ह झाले ✓"
+        syncPending()
+    }
+
+    private fun testConnection() {
+        saveSettings()
+        val url = scriptUrl()
+        val key = scriptKey()
+        if (url.isEmpty() || key.isEmpty()) {
+            tvSettingsStatus.text = "URL आणि गुप्त शब्द दोन्ही भरा"
+            return
+        }
+        tvSettingsStatus.text = "तपासत आहे…"
+        Thread {
+            val err = postJson(url, JSONObject().put("key", key).put("action", "ping"))
+            runOnUiThread {
+                tvSettingsStatus.text = if (err == null) "जोडणी यशस्वी ✓" else "अयशस्वी: $err"
+            }
+        }.start()
+    }
+
+    private fun payload(p: Place, key: String): JSONObject {
+        val emp = p.employee.ifEmpty { employee() }
+        val o = JSONObject()
+            .put("key", key)
+            .put("id", "$emp-${p.id}")
+            .put("date", p.date)
+            .put("employee", emp)
+            .put("farmer", p.farmer)
+            .put("village", p.village)
+            .put("category", p.cat)
+            .put("lat", p.lat)
+            .put("lng", p.lng)
+            .put("accuracy", p.acc.toInt())
+            .put("note", p.note)
+        if (p.photo.isNotEmpty()) {
+            val f = photoFile(p.photo)
+            if (f.exists()) {
+                o.put("photoName", p.photo)
+                o.put("photoBase64", Base64.encodeToString(f.readBytes(), Base64.NO_WRAP))
+            }
+        }
+        return o
+    }
+
+    /** Returns null on success, otherwise a short error text in Marathi. */
+    private fun postJson(url: String, body: JSONObject): String? {
+        return try {
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.connectTimeout = 20000
+            conn.readTimeout = 90000
+            conn.setRequestProperty("Content-Type", "text/plain; charset=utf-8")
+            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            val stream = if (code in 200..399) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            conn.disconnect()
+            when {
+                text.contains("\"ok\":true") -> null
+                text.contains("\"ok\":false") -> JSONObject(text).optString("error", "त्रुटी")
+                text.contains("<html", ignoreCase = true) ->
+                    "URL चुकीची आहे किंवा स्क्रिप्टला 'Anyone' प्रवेश दिलेला नाही"
+                else -> "अनपेक्षित उत्तर (कोड $code)"
+            }
+        } catch (e: Exception) {
+            "इंटरनेट किंवा जोडणीची अडचण"
+        }
+    }
+
+    private fun syncPending() {
+        val url = scriptUrl()
+        val key = scriptKey()
+        if (url.isEmpty() || key.isEmpty()) {
+            tvSync.text = "Google Sheet सेट केलेली नाही (सेटिंग टॅब). नोंदी फक्त या फोनवर आहेत."
+            return
+        }
+        if (syncing) return
+        val pending = places.filter { !it.synced }.toList()
+        if (pending.isEmpty()) {
+            tvSync.text = "सर्व नोंदी सिंक झाल्या ✓"
+            return
+        }
+        syncing = true
+        tvSync.text = "सिंक करत आहे… (${pending.size})"
+        Thread {
+            val done = mutableListOf<Long>()
+            var err: String? = null
+            for (p in pending) {
+                val e = try {
+                    postJson(url, payload(p, key))
+                } catch (ex: Exception) {
+                    "त्रुटी"
+                }
+                if (e == null) done.add(p.id) else {
+                    err = e
+                    break
+                }
+            }
+            runOnUiThread {
+                syncing = false
+                places.filter { it.id in done }.forEach { it.synced = true }
+                saveState()
+                renderList()
+                tvSync.text = if (err == null) "सर्व नोंदी सिंक झाल्या ✓"
+                else "सिंक अपूर्ण: $err. नंतर पुन्हा 'सिंक करा' दाबा."
+            }
+        }.start()
     }
 
     // ---------- helpers ----------

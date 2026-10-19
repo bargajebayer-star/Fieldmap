@@ -171,6 +171,22 @@
                     android:orientation="vertical" />
 
                 <Button
+                    android:id="@+id/btnSync"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:minHeight="52dp"
+                    android:text="सिंक करा" />
+
+                <TextView
+                    android:id="@+id/tvSync"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text=""
+                    android:textSize="13sp" />
+
+                <Button
                     android:id="@+id/btnExport"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -198,6 +214,85 @@
                     android:layout_marginTop="12dp"
                     android:lineSpacingExtra="3dp"
                     android:text="My Maps मध्ये: नवीन नकाशा तयार करा, Import दाबा, शेअर केलेली KML (किंवा CSV) फाईल निवडा. CSV साठी Latitude आणि Longitude हे स्तंभ निवडा. My Maps संगणकावर उत्तम चालते."
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- Tab 3: settings -->
+        <ScrollView
+            android:id="@+id/svSettings"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="कर्मचारी आणि Google Sheet"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/etEmployee"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:hint="तुमचे (कर्मचाऱ्याचे) नाव"
+                    android:inputType="textPersonName|textCapWords"
+                    android:minHeight="48dp" />
+
+                <EditText
+                    android:id="@+id/etScriptUrl"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Sheet ची Web app URL"
+                    android:inputType="textUri"
+                    android:minHeight="48dp" />
+
+                <EditText
+                    android:id="@+id/etKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="गुप्त शब्द (key)"
+                    android:inputType="text"
+                    android:minHeight="48dp" />
+
+                <Button
+                    android:id="@+id/btnSaveSettings"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:minHeight="52dp"
+                    android:text="सेव्ह करा" />
+
+                <Button
+                    android:id="@+id/btnTest"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:text="जोडणी तपासा" />
+
+                <TextView
+                    android:id="@+id/tvSettingsStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text=""
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:lineSpacingExtra="3dp"
+                    android:text="URL आणि गुप्त शब्द सर्व कर्मचाऱ्यांसाठी एकच असतात. फक्त नाव प्रत्येकाचे वेगळे लिहा. URL रिकामी ठेवली तर नोंदी फक्त या फोनवर राहतात."
                     android:textSize="13sp" />
             </LinearLayout>
         </ScrollView>
