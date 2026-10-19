@@ -159,7 +159,8 @@ class MainActivity : AppCompatActivity() {
         btnGps.setOnClickListener { requestLocation() }
         findViewById<Button>(R.id.btnPhoto).setOnClickListener { choosePhotoSource() }
         findViewById<Button>(R.id.btnSave).setOnClickListener { savePlace() }
-        findViewById<Button>(R.id.btnExport).setOnClickListener { exportFiles() }
+        findViewById<Button>(R.id.btnExport).setOnClickListener { exportFiles(false) }
+        findViewById<Button>(R.id.btnExportPhotos).setOnClickListener { exportFiles(true) }
         findViewById<Button>(R.id.btnMyMaps).setOnClickListener {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/d/")))
         }
@@ -429,7 +430,7 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- export ----------
 
-    private fun exportFiles() {
+    private fun exportFiles(includePhotos: Boolean) {
         if (places.isEmpty()) {
             toast("आधी किमान एक ठिकाण जोडा")
             return
@@ -448,7 +449,7 @@ class MainActivity : AppCompatActivity() {
             FileProvider.getUriForFile(this, authority, csvFile)
         )
         for (pl in places) {
-            if (pl.photo.isNotEmpty() && photoFile(pl.photo).exists()) {
+            if (includePhotos && pl.photo.isNotEmpty() && photoFile(pl.photo).exists()) {
                 uris.add(FileProvider.getUriForFile(this, authority, photoFile(pl.photo)))
             }
         }

@@ -176,7 +176,14 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     android:minHeight="52dp"
-                    android:text="CSV + KML + फोटो शेअर करा" />
+                    android:text="फक्त KML आणि CSV शेअर करा" />
+
+                <Button
+                    android:id="@+id/btnExportPhotos"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:text="KML, CSV आणि फोटो शेअर करा" />
 
                 <Button
                     android:id="@+id/btnMyMaps"
